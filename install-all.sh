@@ -6,7 +6,7 @@
 # 3. install stow
 # 4. install tree
 # 5. install tmux
-./install-dotfiles.sh
+# 6. install-dotfiles.sh
 
 
 
@@ -44,3 +44,6 @@ else
 fi
 
 echo "TPM installed successfully!"
+
+# Install dotfiles
+./install-dotfiles.sh
