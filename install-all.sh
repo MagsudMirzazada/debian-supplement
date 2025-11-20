@@ -3,10 +3,12 @@
 # Install all packages in order
 # 1. install zsh
 # 2. install starship
-# 3. install stow
+# 3. install neovim
 # 4. install tree
 # 5. install tmux
-# 6. install-dotfiles.sh
+
+# 6. install stow
+# 7. install-dotfiles.sh
 
 
 
@@ -19,8 +21,8 @@ fi
 
 # 2. Install starship
 sudo apt install -y starship
-# 3. Install stow
-sudo apt install -y stow
+# 3. Install Neovim 
+sudo apt-get install -y neovim 
 # 4. Install tree
 sudo apt install -y tree
 
@@ -45,5 +47,8 @@ fi
 
 echo "TPM installed successfully!"
 
-# Install dotfiles
+
+# 6. Install stow
+sudo apt install -y stow
+# 7. Install dotfiles
 ./install-dotfiles.sh
