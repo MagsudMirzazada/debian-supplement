@@ -4,11 +4,13 @@
 # 1. install zsh
 # 2. install starship
 # 3. install neovim
-# 4. install tree
-# 5. install tmux
+# 4. install lazyvim
+# 5. install ripgrep
+# 6. install tree
+# 7. install tmux
 
-# 6. install stow
-# 7. install-dotfiles.sh
+# 8. install stow
+# 9. install-dotfiles.sh
 
 
 
@@ -21,12 +23,24 @@ fi
 
 # 2. Install starship
 sudo apt install -y starship
-# 3. Install Neovim 
-sudo apt-get install -y neovim 
-# 4. Install tree
+
+# 3. Install Neovim
+sudo apt remove neovim
+wget https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage
+chmod u+x nvim-linux-x86_64.appimage
+sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
+
+# Install lazyvim
+mv ~/.config/nvim{,.bak}
+git clone https://github.com/LazyVim/starter ~/.config/nvim
+rm -rf ~/.config/nvim/.git
+
+# 5. Install ripgrep
+sudo apt-get install ripgrep
+# 6.. Install tree
 sudo apt install -y tree
 
-# 5. Install tmux
+# 7. Install tmux
 yay -S --noconfirm --needed tmux
 
 # Check if tmux is installed
@@ -48,7 +62,7 @@ fi
 echo "TPM installed successfully!"
 
 
-# 6. Install stow
+# 8. Install stow
 sudo apt install -y stow
-# 7. Install dotfiles
+# 9. Install dotfiles
 ./install-dotfiles.sh
