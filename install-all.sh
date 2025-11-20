@@ -11,7 +11,7 @@
 
 # 8. install stow
 # 9. install-dotfiles.sh
-
+# 10. set-shell.sh
 
 
 # 1. Install Zsh
@@ -66,3 +66,6 @@ echo "TPM installed successfully!"
 sudo apt install -y stow
 # 9. Install dotfiles
 ./install-dotfiles.sh
+
+# 10. Check and, Set ZSH as default shell
+./set-shell.sh
