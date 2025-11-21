@@ -41,7 +41,7 @@ sudo apt-get install ripgrep
 sudo apt install -y tree
 
 # 7. Install tmux
-yay -S --noconfirm --needed tmux
+sudo apt install -y tmux
 
 # Check if tmux is installed
 if ! command -v tmux &>/dev/null; then
