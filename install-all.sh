@@ -1,17 +1,20 @@
 #!/bin/bash
 
 # Install all packages in order
-# 1. install zsh
-# 2. install starship
-# 3. install neovim
-# 4. install lazyvim
-# 5. install ripgrep
-# 6. install tree
-# 7. install tmux
+# install zsh
+# install starship
+# install batcat (bat)
+# install fzf
 
-# 8. install stow
-# 9. install-dotfiles.sh
-# 10. set-shell.sh
+# install neovim
+# install lazyvim
+# install ripgrep
+# install tree
+# install tmux
+
+# install stow
+# install-dotfiles.sh
+# set-shell.sh
 
 
 # 1. Install Zsh
@@ -23,6 +26,19 @@ fi
 
 # 2. Install starship
 sudo apt install -y starship
+
+# Install batcat
+sudo apt install -y bat
+echo '\nalias bat="batcat"' >> ~/.zshrc 
+
+# 3. Install fzf
+sudo apt install fzf
+
+echo "\n# Set up fzf key bindings and fuzzy completion" >> ~/.zshrc
+echo "source <(fzf --zsh)" >> ~/.zshrc
+echo "alias nv='nvim \$(fzf -m --preview=\"batcat --color=always {}\")'" >> ~/.zshrc
+
+source ~/.zshrc
 
 # 3. Install Neovim
 sudo apt remove neovim
