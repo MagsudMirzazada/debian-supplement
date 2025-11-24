@@ -5,11 +5,11 @@
 # install starship
 # install batcat (bat)
 # install fzf
+# install ripgrep
+# install tree
 
 # install neovim
 # install lazyvim
-# install ripgrep
-# install tree
 # install tmux
 
 # install stow
@@ -31,8 +31,8 @@ sudo apt install -y starship
 sudo apt install -y bat
 echo '\nalias bat="batcat"' >> ~/.zshrc 
 
-# 3. Install fzf
-sudo apt install fzf
+# Install fzf
+sudo apt install -y fzf
 
 echo "\n# Set up fzf key bindings and fuzzy completion" >> ~/.zshrc
 echo "source <(fzf --zsh)" >> ~/.zshrc
@@ -40,7 +40,12 @@ echo "alias nv='nvim \$(fzf -m --preview=\"batcat --color=always {}\")'" >> ~/.z
 
 source ~/.zshrc
 
-# 3. Install Neovim
+# Install ripgrep
+sudo apt-get install -y ripgrep
+# Install tree
+sudo apt install -y tree
+
+# Install Neovim
 sudo apt remove neovim
 wget https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage
 chmod u+x nvim-linux-x86_64.appimage
@@ -51,12 +56,7 @@ mv ~/.config/nvim{,.bak}
 git clone https://github.com/LazyVim/starter ~/.config/nvim
 rm -rf ~/.config/nvim/.git
 
-# 5. Install ripgrep
-sudo apt-get install ripgrep
-# 6.. Install tree
-sudo apt install -y tree
-
-# 7. Install tmux
+# Install tmux
 sudo apt install -y tmux
 
 # Check if tmux is installed
@@ -78,10 +78,10 @@ fi
 echo "TPM installed successfully!"
 
 
-# 8. Install stow
+# Install stow
 sudo apt install -y stow
-# 9. Install dotfiles
+# Install dotfiles
 ./install-dotfiles.sh
 
-# 10. Check and, Set ZSH as default shell
+# Set ZSH as default shell
 ./set-shell.sh
