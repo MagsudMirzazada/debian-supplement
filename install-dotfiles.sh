@@ -43,8 +43,8 @@ check_stow() {
 backup_configs() {
     local files_to_backup=(
         "$HOME/.config/starship.toml"
-        "$HOME/.config/nvim"
         "$HOME/.config/tmux"
+        # "$HOME/.config/nvim"
         "$HOME/.config/ghostty"
         "$HOME/.tmux.conf"
         "$HOME/.zshrc"
