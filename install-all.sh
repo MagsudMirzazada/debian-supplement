@@ -182,36 +182,20 @@ if command_exists nvim; then
     sudo rm -rf /usr/local/lib/nvim-squashfs-root
 fi
 
-# Download and install latest Neovim AppImage
-NVIM_URL="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage"
-NVIM_TEMP="/tmp/nvim.appimage"
+# Download and install latest Neovim
+NVIM_URL="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz"
+NVIM_TEMP="/tmp/nvim-linux-x86_64.tar.gz"
 
-if wget -O "$NVIM_TEMP" "$NVIM_URL"; then
-    chmod u+x "$NVIM_TEMP"
+if curl -Lo "$NVIM_URL"; then
+    sudo rm -rf /opt/nvim-linux-x86_64
+    sudo tar -C /opt -xzf "$NVIM_TEMP"
+    rm -f "$NVIM_TEMP"
 
-    # Always extract the AppImage rather than running it directly.
-    #
-    # WHY: The previous approach probed for FUSE using --appimage-extract-and-run,
-    #      but that flag itself bypasses FUSE (it extracts to a temp dir internally),
-    #      so the probe always succeeded even on systems without FUSE.  The AppImage
-    #      was then installed as-is, and invoking it later without that flag hit the
-    #      "No suitable fusermount binary" error at runtime.
-    #
-    # Extracting unconditionally avoids FUSE entirely and produces a plain directory
-    # of files that works on every system, including containers and minimal Debian.
-    NVIM_EXTRACT_DIR="/usr/local/lib/nvim-squashfs-root"
-    EXTRACT_TEMP="/tmp/nvim_extract"
-
-    log_info "Extracting Neovim AppImage (no FUSE required)..."
-    rm -rf "$EXTRACT_TEMP" && mkdir -p "$EXTRACT_TEMP"
-    (cd "$EXTRACT_TEMP" && "$NVIM_TEMP" --appimage-extract &>/dev/null)
-    sudo rm -rf "$NVIM_EXTRACT_DIR"
-    sudo mv "$EXTRACT_TEMP/squashfs-root" "$NVIM_EXTRACT_DIR"
-    sudo ln -sf "$NVIM_EXTRACT_DIR/AppRun" /usr/local/bin/nvim
-    rm -rf "$EXTRACT_TEMP" "$NVIM_TEMP"
-    log_info "Neovim installed successfully (extracted to $NVIM_EXTRACT_DIR)"
+    sudo ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
+    log_info "Neovim installed successfully"
 else
     log_error "Failed to download Neovim"
+    rm -f "$NVIM_TEMP"
     exit 1
 fi
 
@@ -228,14 +212,11 @@ log_info "Installing LazyVim..."
 
 NVIM_CONFIG="$HOME/.config/nvim"
 
-# FIX: Previous logic silently skipped re-cloning if both the config dir and
-#      the .bak dir already existed (e.g. on a second run after a failure).
-#      We now distinguish three clear states:
-#
 #   1. Fresh install  — neither dir exists   → clone
 #   2. First backup   — config exists, no .bak → back up then clone
 #   3. Subsequent run — .bak already exists  → warn and skip rather than
 #                       silently leaving nvim unconfigured
+
 if [[ ! -d "$NVIM_CONFIG" ]]; then
     git clone https://github.com/LazyVim/starter "$NVIM_CONFIG"
     rm -rf "${NVIM_CONFIG}/.git"
