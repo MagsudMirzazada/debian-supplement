@@ -179,6 +179,7 @@ if command_exists nvim; then
     log_warn "Removing existing Neovim installation..."
     sudo apt remove -y neovim 2>/dev/null || true
     sudo rm -f /usr/local/bin/nvim
+    sudo rm -rf /usr/local/lib/nvim-squashfs-root
 fi
 
 # Download and install latest Neovim AppImage
@@ -188,28 +189,27 @@ NVIM_TEMP="/tmp/nvim.appimage"
 if wget -O "$NVIM_TEMP" "$NVIM_URL"; then
     chmod u+x "$NVIM_TEMP"
 
-    # FIX: AppImages require FUSE to run directly.  Containers and minimal
-    #      Debian installs often lack it, causing nvim to silently fail at
-    #      launch.  We probe for FUSE support first and fall back to
-    #      --appimage-extract (which unpacks the binary without FUSE) when
-    #      unavailable.
+    # Always extract the AppImage rather than running it directly.
+    #
+    # WHY: The previous approach probed for FUSE using --appimage-extract-and-run,
+    #      but that flag itself bypasses FUSE (it extracts to a temp dir internally),
+    #      so the probe always succeeded even on systems without FUSE.  The AppImage
+    #      was then installed as-is, and invoking it later without that flag hit the
+    #      "No suitable fusermount binary" error at runtime.
+    #
+    # Extracting unconditionally avoids FUSE entirely and produces a plain directory
+    # of files that works on every system, including containers and minimal Debian.
     NVIM_EXTRACT_DIR="/usr/local/lib/nvim-squashfs-root"
+    EXTRACT_TEMP="/tmp/nvim_extract"
 
-    if "$NVIM_TEMP" --appimage-extract-and-run --version &>/dev/null; then
-        # FUSE is available — install the AppImage directly
-        sudo mv "$NVIM_TEMP" /usr/local/bin/nvim
-        log_info "Neovim AppImage installed (FUSE mode)"
-    else
-        log_warn "FUSE unavailable; extracting AppImage instead..."
-        EXTRACT_TEMP="/tmp/nvim_extract"
-        mkdir -p "$EXTRACT_TEMP"
-        (cd "$EXTRACT_TEMP" && "$NVIM_TEMP" --appimage-extract &>/dev/null)
-        sudo rm -rf "$NVIM_EXTRACT_DIR"
-        sudo mv "$EXTRACT_TEMP/squashfs-root" "$NVIM_EXTRACT_DIR"
-        sudo ln -sf "$NVIM_EXTRACT_DIR/AppRun" /usr/local/bin/nvim
-        rm -rf "$EXTRACT_TEMP" "$NVIM_TEMP"
-        log_info "Neovim installed via AppImage extraction"
-    fi
+    log_info "Extracting Neovim AppImage (no FUSE required)..."
+    rm -rf "$EXTRACT_TEMP" && mkdir -p "$EXTRACT_TEMP"
+    (cd "$EXTRACT_TEMP" && "$NVIM_TEMP" --appimage-extract &>/dev/null)
+    sudo rm -rf "$NVIM_EXTRACT_DIR"
+    sudo mv "$EXTRACT_TEMP/squashfs-root" "$NVIM_EXTRACT_DIR"
+    sudo ln -sf "$NVIM_EXTRACT_DIR/AppRun" /usr/local/bin/nvim
+    rm -rf "$EXTRACT_TEMP" "$NVIM_TEMP"
+    log_info "Neovim installed successfully (extracted to $NVIM_EXTRACT_DIR)"
 else
     log_error "Failed to download Neovim"
     exit 1
