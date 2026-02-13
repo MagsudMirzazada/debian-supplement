@@ -68,6 +68,7 @@ PACKAGES=(
     wget
     curl
     git
+    unzip
 )
 
 sudo apt install -y "${PACKAGES[@]}"
@@ -78,10 +79,20 @@ sudo apt install -y "${PACKAGES[@]}"
 log_info "Installing Starship..."
 
 # starship is not available in Debian/Ubuntu apt repos;
-# use the official install script instead
+# download the prebuilt binary from GitHub releases via wget (proxy-friendly)
 if ! command_exists starship; then
-    curl -sS https://starship.rs/install.sh | sh -s -- --yes
-    log_info "Starship installed successfully"
+    STARSHIP_URL="https://github.com/starship/starship/releases/latest/download/starship-x86_64-unknown-linux-gnu.tar.gz"
+    STARSHIP_TEMP="/tmp/starship.tar.gz"
+
+    if wget -O "$STARSHIP_TEMP" "$STARSHIP_URL"; then
+        tar -xzf "$STARSHIP_TEMP" -C /tmp
+        sudo mv /tmp/starship /usr/local/bin/starship
+        rm -f "$STARSHIP_TEMP"
+        log_info "Starship installed successfully"
+    else
+        log_error "Failed to download Starship"
+        exit 1
+    fi
 else
     log_warn "Starship already installed, skipping..."
 fi
@@ -174,6 +185,31 @@ if [[ ! -d "$TPM_DIR" ]]; then
     log_info "TPM installed successfully"
 else
     log_warn "TPM already installed"
+fi
+
+# ============================================
+# Install FiraCode Nerd Font Mono
+# ============================================
+log_info "Installing FiraCode Nerd Font Mono..."
+
+FONT_DIR="$HOME/.local/share/fonts/FiraCode"
+FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip"
+FONT_TEMP="/tmp/FiraCode.zip"
+
+if [[ ! -d "$FONT_DIR" ]]; then
+    mkdir -p "$FONT_DIR"
+
+    if wget -O "$FONT_TEMP" "$FONT_URL"; then
+        unzip -o "$FONT_TEMP" "*Mono*.ttf" -d "$FONT_DIR"
+        rm -f "$FONT_TEMP"
+        fc-cache -fv
+        log_info "FiraCode Nerd Font Mono installed successfully"
+    else
+        log_error "Failed to download FiraCode Nerd Font"
+        exit 1
+    fi
+else
+    log_warn "FiraCode Nerd Font already installed, skipping..."
 fi
 
 # ============================================
