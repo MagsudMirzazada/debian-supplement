@@ -186,7 +186,7 @@ fi
 NVIM_URL="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz"
 NVIM_TEMP="/tmp/nvim-linux-x86_64.tar.gz"
 
-if curl -Lo "$NVIM_URL"; then
+if curl -Lo "$NVIM_TEMP" "$NVIM_URL"; then
     sudo rm -rf /opt/nvim-linux-x86_64
     sudo tar -C /opt -xzf "$NVIM_TEMP"
     rm -f "$NVIM_TEMP"
