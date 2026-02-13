@@ -47,7 +47,9 @@ backup_configs() {
         # "$HOME/.config/nvim"
         "$HOME/.config/ghostty"
         "$HOME/.tmux.conf"
-        "$HOME/.zshrc"
+        # "$HOME/.zshrc" is intentionally excluded: the zshrc stow package is
+        # commented out, so backing up and moving .zshrc would delete it with
+        # nothing to replace it.  .zshrc is managed directly by install.sh.
     )
 
     local backed_up=false
