@@ -9,10 +9,10 @@ readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m'
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $*"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
+log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
-log_step() { echo -e "${BLUE}[STEP]${NC} $*"; }
+log_step()  { echo -e "${BLUE}[STEP]${NC} $*"; }
 
 # Configuration
 readonly REPO_URL="https://github.com/MagsudMirzazada/dotfiles"
@@ -49,9 +49,9 @@ backup_configs() {
         "$HOME/.tmux.conf"
         "$HOME/.zshrc"
     )
-    
+
     local backed_up=false
-    
+
     for file in "${files_to_backup[@]}"; do
         if [[ -e "$file" ]] && [[ ! -L "$file" ]]; then
             if [[ "$backed_up" == false ]]; then
@@ -59,12 +59,12 @@ backup_configs() {
                 log_info "Creating backup directory: $BACKUP_DIR"
                 backed_up=true
             fi
-            
+
             local filename
             filename="$(basename "$file")"
             local parent_dir
             parent_dir="$(dirname "$file")"
-            
+
             # Preserve directory structure in backup
             if [[ "$parent_dir" == *".config"* ]]; then
                 mkdir -p "$BACKUP_DIR/.config"
@@ -72,11 +72,11 @@ backup_configs() {
             else
                 mv "$file" "$BACKUP_DIR/$filename"
             fi
-            
+
             log_info "Backed up: $file"
         fi
     done
-    
+
     if [[ "$backed_up" == true ]]; then
         log_info "Backups saved to: $BACKUP_DIR"
     else
@@ -87,13 +87,13 @@ backup_configs() {
 # Clone or update dotfiles repository
 setup_dotfiles_repo() {
     cd "$HOME" || exit 1
-    
+
     if [[ -d "$DOTFILES_DIR" ]]; then
         log_warn "Repository '$REPO_NAME' already exists"
         log_step "Updating existing repository..."
-        
+
         cd "$DOTFILES_DIR" || exit 1
-        
+
         # Check if it's a git repository
         if [[ -d .git ]]; then
             # Stash any local changes
@@ -101,12 +101,16 @@ setup_dotfiles_repo() {
                 log_warn "Local changes detected, stashing..."
                 git stash
             fi
-            
-            # Pull latest changes
-            if git pull origin main 2>/dev/null || git pull origin master 2>/dev/null; then
+
+            # FIX: stderr was suppressed on both pull attempts with 2>/dev/null,
+            #      making real network failures (auth errors, DNS issues) look
+            #      identical to a simple wrong-branch-name error.  We now keep
+            #      stderr visible so failures are diagnosable, and only suppress
+            #      the expected "branch not found" noise on the first attempt.
+            if git pull origin main 2>/dev/null || git pull origin master; then
                 log_info "Repository updated successfully"
             else
-                log_error "Failed to update repository"
+                log_error "Failed to update repository — check your network and remote URL"
                 return 1
             fi
         else
@@ -115,7 +119,7 @@ setup_dotfiles_repo() {
         fi
     else
         log_step "Cloning dotfiles repository..."
-        
+
         if git clone "$REPO_URL" "$DOTFILES_DIR"; then
             log_info "Repository cloned successfully"
             cd "$DOTFILES_DIR" || exit 1
@@ -129,9 +133,9 @@ setup_dotfiles_repo() {
 # Stow dotfiles
 stow_dotfiles() {
     log_step "Stowing dotfiles..."
-    
+
     cd "$DOTFILES_DIR" || exit 1
-    
+
     # List of packages to stow
     local packages=(
         "starship"
@@ -140,7 +144,7 @@ stow_dotfiles() {
         # "ghostty"
         # "nvim"
     )
-    
+
     # Check which packages are available
     local available_packages=()
     for pkg in "${packages[@]}"; do
@@ -150,47 +154,63 @@ stow_dotfiles() {
             log_warn "Package directory not found: $pkg (skipping)"
         fi
     done
-    
+
     if [[ ${#available_packages[@]} -eq 0 ]]; then
         log_error "No valid package directories found"
         exit 1
     fi
-    
-    # Stow each package
+
+    # FIX 1: 'stow -v' is verbose, NOT a dry-run — using it to check for
+    #         conflicts actually performed the stow, then the elif re-stowed
+    #         the same package a second time.  The correct dry-run flag is
+    #         '-n' / '--no'.  We now dry-run first, inspect for conflicts,
+    #         and only perform the real stow when the preview is clean.
+    #
+    # FIX 2: '((failed++))' with set -e exits the script when failed == 0
+    #         because the arithmetic expression evaluates to 0 (falsy).
+    #         Replaced with 'failed=$((failed + 1))' which is always safe.
     local failed=0
     for pkg in "${available_packages[@]}"; do
+        log_info "Checking: $pkg (dry-run)"
+
+        local dry_output
+        dry_output=$(stow -nv "$pkg" 2>&1 || true)
+
+        if echo "$dry_output" | grep -q "CONFLICT"; then
+            log_error "Conflict detected while stowing $pkg:"
+            echo "$dry_output" | grep "CONFLICT" >&2
+            log_error "Remove the conflicting files manually and re-run, or use --adopt"
+            failed=$((failed + 1))
+            continue
+        fi
+
         log_info "Stowing: $pkg"
-        
-        if stow -v "$pkg" 2>&1 | grep -q "CONFLICT"; then
-            log_error "Conflict detected while stowing $pkg"
-            log_error "Run with --adopt flag or remove conflicting files manually"
-            ((failed++))
-        elif stow "$pkg"; then
+        if stow "$pkg"; then
             log_info "✓ Successfully stowed: $pkg"
         else
             log_error "✗ Failed to stow: $pkg"
-            ((failed++))
+            failed=$((failed + 1))
         fi
     done
-    
+
     if [[ $failed -gt 0 ]]; then
         log_warn "$failed package(s) failed to stow"
         log_warn "You may need to resolve conflicts manually"
         return 1
     fi
-    
+
     log_info "All packages stowed successfully!"
 }
 
 # Verify stow results
 verify_stow() {
     log_step "Verifying stowed configurations..."
-    
+
     local configs_to_check=(
         "$HOME/.config/starship.toml"
         "$HOME/.config/tmux/tmux.conf"
     )
-    
+
     local all_ok=true
     for config in "${configs_to_check[@]}"; do
         if [[ -L "$config" ]]; then
@@ -205,7 +225,7 @@ verify_stow() {
             all_ok=false
         fi
     done
-    
+
     if [[ "$all_ok" == true ]]; then
         log_info "All configurations verified successfully!"
     else
@@ -217,25 +237,25 @@ verify_stow() {
 main() {
     log_info "Starting dotfiles installation..."
     log_info ""
-    
+
     check_stow
     backup_configs
     setup_dotfiles_repo
     stow_dotfiles
     verify_stow
-    
+
     log_info ""
     log_info "============================================"
     log_info "Dotfiles installation completed!"
     log_info "============================================"
     log_info ""
-    
+
     if [[ -d "$BACKUP_DIR" ]]; then
         log_info "Your old configs are backed up in:"
         log_info "  $BACKUP_DIR"
         log_info ""
     fi
-    
+
     log_info "Next steps:"
     log_info "1. Restart your terminal or run: exec zsh"
     log_info "2. Open tmux to verify configuration"
