@@ -59,7 +59,6 @@ sudo apt update
 log_info "Installing core packages..."
 PACKAGES=(
     zsh
-    starship
     bat
     fzf
     ripgrep
@@ -72,6 +71,20 @@ PACKAGES=(
 )
 
 sudo apt install -y "${PACKAGES[@]}"
+
+# ============================================
+# Install Starship
+# ============================================
+log_info "Installing Starship..."
+
+# starship is not available in Debian/Ubuntu apt repos;
+# use the official install script instead
+if ! command_exists starship; then
+    curl -sS https://starship.rs/install.sh | sh -s -- --yes
+    log_info "Starship installed successfully"
+else
+    log_warn "Starship already installed, skipping..."
+fi
 
 # ============================================
 # Configure Zsh
@@ -92,6 +105,11 @@ add_to_file '' ~/.zshrc
 add_to_file '# Set up fzf key bindings and fuzzy completion' ~/.zshrc
 add_to_file 'source <(fzf --zsh)' ~/.zshrc
 add_to_file 'alias nv='\''nvim $(fzf -m --preview="batcat --color=always {}")'\''' ~/.zshrc
+
+# Initialize Starship prompt
+add_to_file '' ~/.zshrc
+add_to_file '# Initialize Starship prompt' ~/.zshrc
+add_to_file 'eval "$(starship init zsh)"' ~/.zshrc
 
 # ============================================
 # Install Neovim
