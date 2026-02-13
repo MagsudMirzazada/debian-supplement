@@ -109,6 +109,21 @@ else
 fi
 
 # ============================================
+# Install Dotfiles
+# ============================================
+# NOTE: This must run BEFORE the "Configure Zsh" section below.
+#       install-dotfiles.sh backs up and moves pre-existing config files.
+#       If it ran after we wrote ~/.zshrc, it would silently move that file
+#       away and leave no .zshrc behind (the zshrc stow package is commented
+#       out, so nothing would replace it).
+if [[ -x "./install-dotfiles.sh" ]]; then
+    log_info "Installing dotfiles..."
+    ./install-dotfiles.sh
+else
+    log_warn "install-dotfiles.sh not found or not executable, skipping..."
+fi
+
+# ============================================
 # Configure Zsh
 # ============================================
 log_info "Configuring Zsh..."
@@ -274,16 +289,6 @@ if [[ ! -d "$FONT_DIR" ]]; then
     fi
 else
     log_warn "FiraCode Nerd Font already installed, skipping..."
-fi
-
-# ============================================
-# Install Dotfiles
-# ============================================
-if [[ -x "./install-dotfiles.sh" ]]; then
-    log_info "Installing dotfiles..."
-    ./install-dotfiles.sh
-else
-    log_warn "install-dotfiles.sh not found or not executable, skipping..."
 fi
 
 # ============================================
