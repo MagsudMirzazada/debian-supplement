@@ -69,6 +69,7 @@ PACKAGES=(
     curl
     git
     unzip
+    fontconfig
 )
 
 sudo apt install -y "${PACKAGES[@]}"
