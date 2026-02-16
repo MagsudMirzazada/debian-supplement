@@ -2,21 +2,19 @@
 
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
-# Color output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly NC='\033[0m' # No Color
+# Resolve script directory so the script works when called from any location.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 
-log_info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh"
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-    log_error "This script should not be run as root"
-    exit 1
-fi
+# Detect architecture once for all download URLs.
+readonly ARCH="$(detect_arch)"
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
 
 # Backup function
 backup_file() {
@@ -28,14 +26,11 @@ backup_file() {
     fi
 }
 
-# Check if command exists
-command_exists() {
-    command -v "$1" &>/dev/null
-}
-
 # Add line to file if not present (idempotent).
 # FIX: 'grep -F ""' matches any non-empty file, so empty lines were never
 #      written.  We now special-case an empty $line and skip the grep entirely.
+# FIX: Use -x (whole-line match) to avoid substring false-positives, e.g.
+#      a commented-out line matching the uncommented version.
 add_to_file() {
     local line="$1"
     local file="$2"
@@ -47,7 +42,7 @@ add_to_file() {
         return
     fi
 
-    if ! grep -qF "$line" "$file" 2>/dev/null; then
+    if ! grep -qxF "$line" "$file" 2>/dev/null; then
         echo "$line" >> "$file"
         log_info "Added to $file: $line"
     else
@@ -55,258 +50,300 @@ add_to_file() {
     fi
 }
 
-# ============================================
-# Main Installation
-# ============================================
+# ---------------------------------------------------------------------------
+# Installation sections
+# ---------------------------------------------------------------------------
 
-log_info "Starting installation process..."
+install_core_packages() {
+    log_info "Updating package lists..."
+    sudo apt update
 
-# Update package list
-log_info "Updating package lists..."
-sudo apt update
+    log_info "Installing core packages..."
+    readonly PACKAGES=(
+        zsh
+        bat
+        fzf
+        ripgrep
+        tree
+        tmux
+        stow
+        wget
+        curl
+        git
+        unzip
+        fontconfig
+    )
 
-# Batch install core packages
-log_info "Installing core packages..."
-PACKAGES=(
-    zsh
-    bat
-    fzf
-    ripgrep
-    tree
-    tmux
-    stow
-    wget
-    curl
-    git
-    unzip
-    fontconfig
-)
+    sudo apt install -y "${PACKAGES[@]}"
+}
 
-sudo apt install -y "${PACKAGES[@]}"
+install_starship() {
+    log_info "Installing Starship..."
 
-# ============================================
-# Install Starship
-# ============================================
-log_info "Installing Starship..."
+    if command_exists starship; then
+        log_warn "Starship already installed, skipping..."
+        return
+    fi
 
-# starship is not available in Debian/Ubuntu apt repos;
-# download the prebuilt binary from GitHub releases via wget (proxy-friendly)
-if ! command_exists starship; then
-    STARSHIP_URL="https://github.com/starship/starship/releases/latest/download/starship-x86_64-unknown-linux-gnu.tar.gz"
-    STARSHIP_TEMP="/tmp/starship.tar.gz"
+    readonly STARSHIP_URL="https://github.com/starship/starship/releases/latest/download/starship-${ARCH}-unknown-linux-gnu.tar.gz"
+    local starship_temp="/tmp/starship.tar.gz"
+    register_temp "$starship_temp"
 
-    if wget -O "$STARSHIP_TEMP" "$STARSHIP_URL"; then
-        tar -xzf "$STARSHIP_TEMP" -C /tmp
+    if download "$STARSHIP_URL" "$starship_temp"; then
+        tar -xzf "$starship_temp" -C /tmp
         sudo mv /tmp/starship /usr/local/bin/starship
-        rm -f "$STARSHIP_TEMP"
+        rm -f "$starship_temp"
         log_info "Starship installed successfully"
     else
         log_error "Failed to download Starship"
         exit 1
     fi
-else
-    log_warn "Starship already installed, skipping..."
-fi
-
-# ============================================
-# Install Dotfiles
-# ============================================
-# NOTE: This must run BEFORE the "Configure Zsh" section below.
-#       install-dotfiles.sh backs up and moves pre-existing config files.
-#       If it ran after we wrote ~/.zshrc, it would silently move that file
-#       away and leave no .zshrc behind (the zshrc stow package is commented
-#       out, so nothing would replace it).
-if [[ -x "./install-dotfiles.sh" ]]; then
-    log_info "Installing dotfiles..."
-    ./install-dotfiles.sh
-else
-    log_warn "install-dotfiles.sh not found or not executable, skipping..."
-fi
-
-# ============================================
-# Configure Zsh
-# ============================================
-log_info "Configuring Zsh..."
-
-# Create .zshrc if it doesn't exist
-[[ ! -f ~/.zshrc ]] && touch ~/.zshrc
-backup_file ~/.zshrc
-
-# Add bat alias (idempotent)
-if command_exists batcat && ! command_exists bat; then
-    add_to_file 'alias bat="batcat"' ~/.zshrc
-fi
-
-# FIX: The '--zsh' shell-integration flag was introduced in fzf 0.48.0.
-#      Debian stable ships much older fzf builds (e.g. 0.38), so calling
-#      'fzf --zsh' on those versions prints an error and breaks .zshrc.
-#      We check the version and fall back to the legacy sourcing method when
-#      necessary.
-add_to_file '' ~/.zshrc
-add_to_file '# Set up fzf key bindings and fuzzy completion' ~/.zshrc
-
-FZF_MIN_VERSION="0.48.0"
-FZF_CURRENT_VERSION="$(fzf --version 2>/dev/null | awk '{print $1}' || echo "0.0.0")"
-
-version_gte() {
-    # Returns 0 (true) if $1 >= $2 using sort -V
-    [[ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" == "$2" ]]
 }
 
-if version_gte "$FZF_CURRENT_VERSION" "$FZF_MIN_VERSION"; then
-    add_to_file 'source <(fzf --zsh)' ~/.zshrc
-else
-    log_warn "fzf $FZF_CURRENT_VERSION detected (< $FZF_MIN_VERSION); using legacy integration"
-    # Legacy paths shipped with the Debian fzf package
-    add_to_file '[[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]] && source /usr/share/doc/fzf/examples/key-bindings.zsh' ~/.zshrc
-    add_to_file '[[ -f /usr/share/doc/fzf/examples/completion.zsh  ]] && source /usr/share/doc/fzf/examples/completion.zsh'  ~/.zshrc
-fi
+install_dotfiles() {
+    if [[ -x "$SCRIPT_DIR/install-dotfiles.sh" ]]; then
+        log_info "Installing dotfiles..."
+        "$SCRIPT_DIR/install-dotfiles.sh"
+    else
+        log_warn "install-dotfiles.sh not found or not executable, skipping..."
+    fi
+}
 
-add_to_file 'alias nv='\''nvim $(fzf -m --preview="batcat --color=always {}")'\''' ~/.zshrc
+configure_zsh() {
+    log_info "Configuring Zsh..."
 
-# Initialize Starship prompt
-add_to_file '' ~/.zshrc
-add_to_file '# Initialize Starship prompt' ~/.zshrc
-add_to_file 'eval "$(starship init zsh)"' ~/.zshrc
+    # Create .zshrc if it doesn't exist
+    [[ ! -f ~/.zshrc ]] && touch ~/.zshrc
+    backup_file ~/.zshrc
 
-# ============================================
-# Install Neovim
-# ============================================
-log_info "Installing Neovim..."
+    # Create ~/.zsh_aliases for user aliases (sourced from .zshrc)
+    readonly ALIAS_FILE="$HOME/.zsh_aliases"
+    if [[ ! -f "$ALIAS_FILE" ]]; then
+        log_info "Creating $ALIAS_FILE..."
+        cat > "$ALIAS_FILE" << 'ALIASES'
+# Zsh aliases — add your custom aliases here.
 
-# Remove old neovim if present
-if command_exists nvim; then
-    log_warn "Removing existing Neovim installation..."
-    sudo apt remove -y neovim 2>/dev/null || true
-    sudo rm -f /usr/local/bin/nvim
-    sudo rm -rf /usr/local/lib/nvim-squashfs-root
-fi
+ALIASES
+    fi
 
-# Download and install latest Neovim
-NVIM_URL="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz"
-NVIM_TEMP="/tmp/nvim-linux-x86_64.tar.gz"
+    # Add bat alias
+    if command_exists batcat && ! command_exists bat; then
+        add_to_file 'alias bat="batcat"' "$ALIAS_FILE"
+    fi
 
-if curl -Lo "$NVIM_TEMP" "$NVIM_URL"; then
-    sudo rm -rf /opt/nvim-linux-x86_64
-    sudo tar -C /opt -xzf "$NVIM_TEMP"
-    rm -f "$NVIM_TEMP"
+    # Add nv alias (fuzzy-find + open in neovim)
+    add_to_file 'alias nv='\''nvim $(fzf -m --preview="batcat --color=always {}")'\''' "$ALIAS_FILE"
 
-    sudo ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
-    log_info "Neovim installed successfully"
-else
-    log_error "Failed to download Neovim"
-    rm -f "$NVIM_TEMP"
-    exit 1
-fi
+    # Source alias file from .zshrc
+    add_to_file '' ~/.zshrc
+    add_to_file '# Load aliases' ~/.zshrc
+    add_to_file '[[ -f ~/.zsh_aliases ]] && source ~/.zsh_aliases' ~/.zshrc
 
-# Verify Neovim installation
-if ! command_exists nvim; then
-    log_error "Neovim installation verification failed"
-    exit 1
-fi
+    # FIX: The '--zsh' shell-integration flag was introduced in fzf 0.48.0.
+    #      Debian stable ships much older fzf builds (e.g. 0.38), so calling
+    #      'fzf --zsh' on those versions prints an error and breaks .zshrc.
+    #      We check the version and fall back to the legacy sourcing method when
+    #      necessary.
+    add_to_file '' ~/.zshrc
+    add_to_file '# Set up fzf key bindings and fuzzy completion' ~/.zshrc
 
-# ============================================
-# Install LazyVim
-# ============================================
-log_info "Installing LazyVim..."
+    local fzf_min_version="0.48.0"
+    local fzf_current_version
+    fzf_current_version="$(fzf --version 2>/dev/null | awk '{print $1}' || echo "0.0.0")"
 
-NVIM_CONFIG="$HOME/.config/nvim"
+    if version_gte "$fzf_current_version" "$fzf_min_version"; then
+        add_to_file 'source <(fzf --zsh)' ~/.zshrc
+    else
+        log_warn "fzf $fzf_current_version detected (< $fzf_min_version); using legacy integration"
+        # Legacy paths shipped with the Debian fzf package
+        add_to_file '[[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]] && source /usr/share/doc/fzf/examples/key-bindings.zsh' ~/.zshrc
+        add_to_file '[[ -f /usr/share/doc/fzf/examples/completion.zsh  ]] && source /usr/share/doc/fzf/examples/completion.zsh'  ~/.zshrc
+    fi
 
-#   1. Fresh install  — neither dir exists   → clone
-#   2. First backup   — config exists, no .bak → back up then clone
-#   3. Subsequent run — .bak already exists  → warn and skip rather than
-#                       silently leaving nvim unconfigured
+    # Initialize Starship prompt
+    add_to_file '' ~/.zshrc
+    add_to_file '# Initialize Starship prompt' ~/.zshrc
+    add_to_file 'eval "$(starship init zsh)"' ~/.zshrc
+}
 
-if [[ ! -d "$NVIM_CONFIG" ]]; then
-    git clone https://github.com/LazyVim/starter "$NVIM_CONFIG"
-    rm -rf "${NVIM_CONFIG}/.git"
-    log_info "LazyVim installed successfully"
-elif [[ ! -d "${NVIM_CONFIG}.bak" ]]; then
-    log_info "Backing up existing nvim config to ${NVIM_CONFIG}.bak ..."
-    mv "$NVIM_CONFIG" "${NVIM_CONFIG}.bak"
-    git clone https://github.com/LazyVim/starter "$NVIM_CONFIG"
-    rm -rf "${NVIM_CONFIG}/.git"
-    log_info "LazyVim installed successfully"
-else
-    log_warn "Both $NVIM_CONFIG and ${NVIM_CONFIG}.bak already exist."
-    log_warn "Skipping LazyVim install to avoid overwriting data."
-    log_warn "Remove or rename one of them and re-run if you want a fresh install."
-fi
+install_neovim() {
+    log_info "Installing Neovim..."
 
-# ============================================
-# Install TPM (Tmux Plugin Manager)
-# ============================================
-log_info "Installing Tmux Plugin Manager..."
+    # Idempotency: skip if nvim already exists and the opt directory is present
+    if command_exists nvim && compgen -G "/opt/nvim-linux-*" >/dev/null 2>&1; then
+        log_warn "Neovim already installed at $(command -v nvim), skipping..."
+        return
+    fi
 
-TPM_DIR="$HOME/.tmux/plugins/tpm"
+    # Remove old neovim if present (apt-installed or stale binary)
+    if command_exists nvim; then
+        log_warn "Removing existing Neovim installation..."
+        sudo apt remove -y neovim 2>/dev/null || true
+        sudo rm -f /usr/local/bin/nvim
+        sudo rm -rf /usr/local/lib/nvim-squashfs-root
+    fi
 
-if [[ ! -d "$TPM_DIR" ]]; then
-    git clone https://github.com/tmux-plugins/tpm "$TPM_DIR"
-    log_info "TPM installed successfully"
-else
-    log_warn "TPM already installed, skipping..."
-fi
+    # Map architecture to Neovim release naming convention
+    local nvim_arch
+    case "$ARCH" in
+        x86_64)  nvim_arch="x86_64"  ;;
+        aarch64) nvim_arch="aarch64" ;;
+    esac
 
-# ============================================
-# Install FiraCode Nerd Font Mono
-# ============================================
-log_info "Installing FiraCode Nerd Font Mono..."
+    readonly NVIM_URL="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-${nvim_arch}.tar.gz"
+    local nvim_temp="/tmp/nvim-linux-${nvim_arch}.tar.gz"
+    register_temp "$nvim_temp"
 
-FONT_DIR="$HOME/.local/share/fonts/FiraCode"
-FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip"
-FONT_TEMP="/tmp/FiraCode.zip"
+    if download "$NVIM_URL" "$nvim_temp"; then
+        sudo rm -rf "/opt/nvim-linux-${nvim_arch}"
+        sudo tar -C /opt -xzf "$nvim_temp"
+        rm -f "$nvim_temp"
 
-if [[ ! -d "$FONT_DIR" ]]; then
+        sudo ln -sf "/opt/nvim-linux-${nvim_arch}/bin/nvim" /usr/local/bin/nvim
+        log_info "Neovim installed successfully"
+    else
+        log_error "Failed to download Neovim"
+        exit 1
+    fi
+
+    # Verify Neovim installation
+    if ! command_exists nvim; then
+        log_error "Neovim installation verification failed"
+        exit 1
+    fi
+}
+
+install_lazyvim() {
+    log_info "Installing LazyVim..."
+
+    readonly NVIM_CONFIG="$HOME/.config/nvim"
+
+    #   1. Fresh install  — neither dir exists   -> clone
+    #   2. First backup   — config exists, no .bak -> back up then clone
+    #   3. Subsequent run — .bak already exists  -> warn and skip rather than
+    #                       silently leaving nvim unconfigured
+
+    if [[ ! -d "$NVIM_CONFIG" ]]; then
+        git clone https://github.com/LazyVim/starter "$NVIM_CONFIG"
+        rm -rf "${NVIM_CONFIG}/.git"
+        log_info "LazyVim installed successfully"
+    elif [[ ! -d "${NVIM_CONFIG}.bak" ]]; then
+        log_info "Backing up existing nvim config to ${NVIM_CONFIG}.bak ..."
+        mv "$NVIM_CONFIG" "${NVIM_CONFIG}.bak"
+        git clone https://github.com/LazyVim/starter "$NVIM_CONFIG"
+        rm -rf "${NVIM_CONFIG}/.git"
+        log_info "LazyVim installed successfully"
+    else
+        log_warn "Both $NVIM_CONFIG and ${NVIM_CONFIG}.bak already exist."
+        log_warn "Skipping LazyVim install to avoid overwriting data."
+        log_warn "Remove or rename one of them and re-run if you want a fresh install."
+    fi
+}
+
+install_tpm() {
+    log_info "Installing Tmux Plugin Manager..."
+
+    readonly TPM_DIR="$HOME/.tmux/plugins/tpm"
+
+    if [[ ! -d "$TPM_DIR" ]]; then
+        git clone https://github.com/tmux-plugins/tpm "$TPM_DIR"
+        log_info "TPM installed successfully"
+    else
+        log_warn "TPM already installed, skipping..."
+    fi
+}
+
+install_fonts() {
+    log_info "Installing FiraCode Nerd Font Mono..."
+
+    readonly FONT_DIR="$HOME/.local/share/fonts/FiraCode"
+    readonly FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip"
+    local font_temp="/tmp/FiraCode.zip"
+    register_temp "$font_temp"
+
+    if [[ -d "$FONT_DIR" ]]; then
+        log_warn "FiraCode Nerd Font already installed, skipping..."
+        return
+    fi
+
     mkdir -p "$FONT_DIR"
 
-    if wget -O "$FONT_TEMP" "$FONT_URL"; then
-        unzip -o "$FONT_TEMP" "*Mono*.ttf" -d "$FONT_DIR"
-        rm -f "$FONT_TEMP"
+    if download "$FONT_URL" "$font_temp"; then
+        unzip -o "$font_temp" "*Mono*.ttf" -d "$FONT_DIR"
+        rm -f "$font_temp"
         fc-cache -fv
         log_info "FiraCode Nerd Font Mono installed successfully"
     else
         log_error "Failed to download FiraCode Nerd Font"
         exit 1
     fi
-else
-    log_warn "FiraCode Nerd Font already installed, skipping..."
-fi
+}
 
-# ============================================
-# Set Zsh as Default Shell
-# ============================================
-if [[ -f ./set-shell.sh ]]; then
-    if [[ ! -x ./set-shell.sh ]]; then
-        chmod +x ./set-shell.sh
-        log_info "Adding executable bit to set-shell.sh"
-    else
+set_default_shell() {
+    if [[ -f "$SCRIPT_DIR/set-shell.sh" ]]; then
+        if [[ ! -x "$SCRIPT_DIR/set-shell.sh" ]]; then
+            chmod +x "$SCRIPT_DIR/set-shell.sh"
+            log_info "Adding executable bit to set-shell.sh"
+        fi
         log_info "Setting Zsh as default shell..."
-        ./set-shell.sh
-    fi
-else
-    log_warn "set-shell.sh not found or cannot be made executable"
-    log_info "Fallback method executing, setting shell directly"
-    
-    # Fallback: set shell directly
-    ZSH_PATH="$(command -v zsh 2>/dev/null || true)"
-    if [[ -n "$ZSH_PATH" ]] && [[ "$SHELL" != "$ZSH_PATH" ]]; then
-        log_info "Changing default shell to Zsh..."
-        chsh -s "$ZSH_PATH"
-        log_info "Shell changed. Please log out and back in for changes to take effect."
-    fi
-fi
+        "$SCRIPT_DIR/set-shell.sh"
+    else
+        log_warn "set-shell.sh not found or cannot be made executable"
+        log_info "Fallback method executing, setting shell directly"
 
-# ============================================
-# Final Steps
-# ============================================
-log_info ""
-log_info "============================================"
-log_info "Installation completed successfully!"
-log_info "============================================"
-log_info ""
-log_info "Next steps:"
-log_info "1. Log out and back in (or restart) for shell changes to take effect"
-log_info "2. Launch tmux and press 'prefix + I' to install tmux plugins"
-log_info "3. Open nvim to let LazyVim install plugins"
-log_info ""
-log_info "Backups of modified files are saved with .backup.* extensions"
+        # Fallback: set shell directly
+        local zsh_path
+        zsh_path="$(command -v zsh 2>/dev/null || true)"
+        if [[ -n "$zsh_path" ]] && [[ "$SHELL" != "$zsh_path" ]]; then
+            log_info "Changing default shell to Zsh..."
+            chsh -s "$zsh_path"
+            log_info "Shell changed. Please log out and back in for changes to take effect."
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+main() {
+    # Check if running as root
+    if [[ $EUID -eq 0 ]]; then
+        log_error "This script should not be run as root"
+        exit 1
+    fi
+
+    trap cleanup_temp EXIT
+
+    log_info "Starting installation process..."
+
+    install_core_packages
+    install_starship
+
+    # NOTE: Dotfiles must be installed BEFORE configure_zsh.
+    # install-dotfiles.sh backs up and moves pre-existing config files.
+    # If it ran after we wrote ~/.zshrc, it would silently move that file
+    # away and leave no .zshrc behind.
+    install_dotfiles
+    configure_zsh
+
+    install_neovim
+    install_lazyvim
+    install_tpm
+    install_fonts
+    set_default_shell
+
+    log_info ""
+    log_info "============================================"
+    log_info "Installation completed successfully!"
+    log_info "============================================"
+    log_info ""
+    log_info "Next steps:"
+    log_info "1. Log out and back in (or restart) for shell changes to take effect"
+    log_info "2. Launch tmux and press 'prefix + I' to install tmux plugins"
+    log_info "3. Open nvim to let LazyVim install plugins"
+    log_info ""
+    log_info "Backups of modified files are saved with .backup.* extensions"
+}
+
+main "$@"

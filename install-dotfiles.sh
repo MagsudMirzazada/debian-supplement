@@ -2,17 +2,12 @@
 
 set -euo pipefail
 
-# Color output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
+# Resolve script directory so the script works when called from any location.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 
-log_info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
-log_step()  { echo -e "${BLUE}[STEP]${NC} $*"; }
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh"
 
 # Configuration
 readonly REPO_URL="https://github.com/MagsudMirzazada/dotfiles"
@@ -25,13 +20,14 @@ ORIGINAL_DIR="$(pwd)"
 
 # Cleanup function to return to original directory
 cleanup() {
+    cleanup_temp
     cd "$ORIGINAL_DIR" || true
 }
 trap cleanup EXIT
 
 # Check if stow is installed
 check_stow() {
-    if ! command -v stow &>/dev/null; then
+    if ! command_exists stow; then
         log_error "GNU Stow is not installed. Please install it first:"
         log_error "  sudo apt install -y stow"
         exit 1
@@ -40,6 +36,11 @@ check_stow() {
 }
 
 # Backup existing configs
+# FIX: The old code used basename + a fragile ".config" glob check, which
+#      flattened nested paths (e.g. .config/tmux and .config/ghostty both
+#      became just their basename under .config/).  We now preserve the full
+#      relative path from $HOME so the backup directory mirrors the original
+#      directory structure exactly.
 backup_configs() {
     local files_to_backup=(
         "$HOME/.config/starship.toml"
@@ -62,18 +63,12 @@ backup_configs() {
                 backed_up=true
             fi
 
-            local filename
-            filename="$(basename "$file")"
-            local parent_dir
-            parent_dir="$(dirname "$file")"
-
-            # Preserve directory structure in backup
-            if [[ "$parent_dir" == *".config"* ]]; then
-                mkdir -p "$BACKUP_DIR/.config"
-                mv "$file" "$BACKUP_DIR/.config/$filename"
-            else
-                mv "$file" "$BACKUP_DIR/$filename"
-            fi
+            # Preserve full directory structure relative to $HOME
+            local rel_path="${file#"$HOME"/}"
+            local dest_dir
+            dest_dir="$(dirname "$BACKUP_DIR/$rel_path")"
+            mkdir -p "$dest_dir"
+            mv "$file" "$BACKUP_DIR/$rel_path"
 
             log_info "Backed up: $file"
         fi
@@ -104,13 +99,21 @@ setup_dotfiles_repo() {
                 git stash
             fi
 
-            # FIX: stderr was suppressed on both pull attempts with 2>/dev/null,
-            #      making real network failures (auth errors, DNS issues) look
-            #      identical to a simple wrong-branch-name error.  We now keep
-            #      stderr visible so failures are diagnosable, and only suppress
-            #      the expected "branch not found" noise on the first attempt.
-            if git pull origin main 2>/dev/null || git pull origin master; then
+            # FIX: Detect the default branch from the remote instead of
+            #      guessing main/master and suppressing stderr.
+            local default_branch
+            default_branch="$(git remote show origin 2>/dev/null \
+                | sed -n 's/.*HEAD branch: //p')" || true
+
+            if [[ -z "$default_branch" ]]; then
+                log_warn "Could not detect default branch, trying main then master"
+                default_branch="main"
+            fi
+
+            if git pull origin "$default_branch"; then
                 log_info "Repository updated successfully"
+            elif [[ "$default_branch" == "main" ]] && git pull origin master; then
+                log_info "Repository updated successfully (fell back to master)"
             else
                 log_error "Failed to update repository — check your network and remote URL"
                 return 1
@@ -162,15 +165,6 @@ stow_dotfiles() {
         exit 1
     fi
 
-    # FIX 1: 'stow -v' is verbose, NOT a dry-run — using it to check for
-    #         conflicts actually performed the stow, then the elif re-stowed
-    #         the same package a second time.  The correct dry-run flag is
-    #         '-n' / '--no'.  We now dry-run first, inspect for conflicts,
-    #         and only perform the real stow when the preview is clean.
-    #
-    # FIX 2: '((failed++))' with set -e exits the script when failed == 0
-    #         because the arithmetic expression evaluates to 0 (falsy).
-    #         Replaced with 'failed=$((failed + 1))' which is always safe.
     local failed=0
     for pkg in "${available_packages[@]}"; do
         log_info "Checking: $pkg (dry-run)"
@@ -188,9 +182,9 @@ stow_dotfiles() {
 
         log_info "Stowing: $pkg"
         if stow "$pkg"; then
-            log_info "✓ Successfully stowed: $pkg"
+            log_info "Successfully stowed: $pkg"
         else
-            log_error "✗ Failed to stow: $pkg"
+            log_error "Failed to stow: $pkg"
             failed=$((failed + 1))
         fi
     done
@@ -218,12 +212,12 @@ verify_stow() {
         if [[ -L "$config" ]]; then
             local target
             target="$(readlink -f "$config")"
-            log_info "✓ $config -> $target"
+            log_info "$config -> $target"
         elif [[ -e "$config" ]]; then
-            log_warn "! $config exists but is not a symlink"
+            log_warn "$config exists but is not a symlink"
             all_ok=false
         else
-            log_warn "✗ $config not found"
+            log_warn "$config not found"
             all_ok=false
         fi
     done

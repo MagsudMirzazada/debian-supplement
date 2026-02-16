@@ -2,13 +2,12 @@
 
 set -euo pipefail
 
-# Color output
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly NC='\033[0m'
+# Resolve script directory so the script works when called from any location.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 
-log_info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh"
 
 # FIX: 'which zsh' exits with a non-zero status when zsh is not installed.
 #      Under 'set -e' this terminates the script immediately — before the
