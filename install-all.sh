@@ -284,6 +284,8 @@ if [[ -f ./set-shell.sh ]]; then
         ./set-shell.sh
 else
     log_warn "set-shell.sh not found or cannot be made executable"
+    fi
+fi
 
     # Fallback: set shell directly
     ZSH_PATH="$(command -v zsh 2>/dev/null || true)"
