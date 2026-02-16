@@ -282,11 +282,11 @@ if [[ -f ./set-shell.sh ]]; then
     else
         log_info "Setting Zsh as default shell..."
         ./set-shell.sh
+    fi
 else
     log_warn "set-shell.sh not found or cannot be made executable"
-    fi
-fi
-
+    log_info "Fallback method executing, setting shell directly"
+    
     # Fallback: set shell directly
     ZSH_PATH="$(command -v zsh 2>/dev/null || true)"
     if [[ -n "$ZSH_PATH" ]] && [[ "$SHELL" != "$ZSH_PATH" ]]; then
