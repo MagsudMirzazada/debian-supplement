@@ -275,11 +275,15 @@ fi
 # ============================================
 # Set Zsh as Default Shell
 # ============================================
-if [[ -x "./set-shell.sh" ]]; then
-    log_info "Setting Zsh as default shell..."
-    ./set-shell.sh
+if [[ -f ./set-shell.sh ]]; then
+    if [[ ! -x ./set-shell.sh ]]; then
+        chmod +x ./set-shell.sh
+        log_info "Adding executable bit to set-shell.sh"
+    else
+        log_info "Setting Zsh as default shell..."
+        ./set-shell.sh
 else
-    log_warn "set-shell.sh not found or not executable"
+    log_warn "set-shell.sh not found or cannot be made executable"
 
     # Fallback: set shell directly
     ZSH_PATH="$(command -v zsh 2>/dev/null || true)"
