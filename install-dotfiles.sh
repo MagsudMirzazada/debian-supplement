@@ -36,18 +36,14 @@ check_stow() {
 }
 
 # Backup existing configs
-# FIX: The old code used basename + a fragile ".config" glob check, which
-#      flattened nested paths (e.g. .config/tmux and .config/ghostty both
-#      became just their basename under .config/).  We now preserve the full
-#      relative path from $HOME so the backup directory mirrors the original
-#      directory structure exactly.
 backup_configs() {
     local files_to_backup=(
         "$HOME/.config/starship.toml"
         "$HOME/.config/tmux"
         # "$HOME/.config/nvim"
-        "$HOME/.config/ghostty"
+        # "$HOME/.config/ghostty"
         "$HOME/.tmux.conf"
+        "$HOME/.zsh_aliases"
         # "$HOME/.zshrc" is intentionally excluded: the zshrc stow package is
         # commented out, so backing up and moving .zshrc would delete it with
         # nothing to replace it.  .zshrc is managed directly by install.sh.
@@ -145,6 +141,7 @@ stow_dotfiles() {
     local packages=(
         "starship"
         "tmux"
+        "zsh"
         # "zshrc"
         # "ghostty"
         # "nvim"
@@ -205,6 +202,7 @@ verify_stow() {
     local configs_to_check=(
         "$HOME/.config/starship.toml"
         "$HOME/.config/tmux/tmux.conf"
+        "$HOME/.zsh_aliases"
     )
 
     local all_ok=true

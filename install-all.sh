@@ -116,25 +116,7 @@ configure_zsh() {
     [[ ! -f ~/.zshrc ]] && touch ~/.zshrc
     backup_file ~/.zshrc
 
-    # Create ~/.zsh_aliases for user aliases (sourced from .zshrc)
-    readonly ALIAS_FILE="$HOME/.zsh_aliases"
-    if [[ ! -f "$ALIAS_FILE" ]]; then
-        log_info "Creating $ALIAS_FILE..."
-        cat > "$ALIAS_FILE" << 'ALIASES'
-# Zsh aliases — add your custom aliases here.
-
-ALIASES
-    fi
-
-    # Add bat alias
-    if command_exists batcat && ! command_exists bat; then
-        add_to_file 'alias bat="batcat"' "$ALIAS_FILE"
-    fi
-
-    # Add nv alias (fuzzy-find + open in neovim)
-    add_to_file 'alias nv='\''nvim $(fzf -m --preview="batcat --color=always {}")'\''' "$ALIAS_FILE"
-
-    # Source alias file from .zshrc
+    # Source alias file from .zshrc (aliases managed via dotfiles/zsh stow package)
     add_to_file '' ~/.zshrc
     add_to_file '# Load aliases' ~/.zshrc
     add_to_file '[[ -f ~/.zsh_aliases ]] && source ~/.zsh_aliases' ~/.zshrc
