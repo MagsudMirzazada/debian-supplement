@@ -85,7 +85,7 @@ install_fzf() {
     fi
 
     git clone --depth 1 https://github.com/junegunn/fzf.git "$HOME/.fzf"
-    "$HOME/.fzf/install" --all
+    "$HOME/.fzf/install" --bin
     log_info "fzf installed successfully"
 }
 
