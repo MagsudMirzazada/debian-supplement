@@ -8,7 +8,7 @@
 
 1. Core APT packages → 2. Starship → 3. **Dotfiles (stow)** → 4. fzf → 5. Zsh plugins → 6. Neovim → 7. LazyVim → 8. TPM → 9. Fonts → 10. Set default shell
 
-**Ordering constraint:** Dotfiles must be stowed *before* fzf install because `~/.fzf/install --all` appends to `~/.zshrc`. Stow must place `.zshrc` first so fzf appends to the symlinked file.
+fzf uses `--bin` (binary only), and `.zshrc` handles fzf integration directly in the template — no strict ordering required between dotfiles and fzf.
 
 ## Files Backed Up
 
@@ -31,7 +31,7 @@ Stow symlinks (from `~/dotfiles`):
 
 Installed from GitHub:
 
-- `~/.fzf/` — fzf fuzzy finder
+- `~/.fzf/` — fzf fuzzy finder (binary only via `--bin`; shell integration in `.zshrc` template)
 - `~/.zsh/zsh-autosuggestions/` — zsh-autosuggestions plugin
 - `~/.zsh/zsh-syntax-highlighting/` — zsh-syntax-highlighting plugin
 - `~/.config/nvim/` — LazyVim starter
@@ -48,5 +48,4 @@ Fonts:
 
 ## Files Modified
 
-- `~/.zshrc` — fzf integration appended by `~/.fzf/install --all`
 - `/etc/shells` — adds zsh path if missing (`set-shell.sh`)
