@@ -121,22 +121,25 @@ install_dotfiles() {
     fi
 }
 
-configure_zsh() {
-    log_info "Configuring Zsh..."
+install_zsh_plugins() {
+    log_info "Installing Zsh plugins..."
 
-    # Create .zshrc if it doesn't exist
-    [[ ! -f ~/.zshrc ]] && touch ~/.zshrc
-    backup_file ~/.zshrc
+    local plugin_dir="$HOME/.zsh"
+    mkdir -p "$plugin_dir"
 
-    # Source alias file from .zshrc (aliases managed via dotfiles/zsh stow package)
-    add_to_file '' ~/.zshrc
-    add_to_file '# Load aliases' ~/.zshrc
-    add_to_file '[[ -f ~/.zsh_aliases ]] && source ~/.zsh_aliases' ~/.zshrc
+    if [[ ! -d "$plugin_dir/zsh-autosuggestions" ]]; then
+        git clone https://github.com/zsh-users/zsh-autosuggestions "$plugin_dir/zsh-autosuggestions"
+        log_info "zsh-autosuggestions installed"
+    else
+        log_warn "zsh-autosuggestions already installed, skipping..."
+    fi
 
-    # Initialize Starship prompt
-    add_to_file '' ~/.zshrc
-    add_to_file '# Initialize Starship prompt' ~/.zshrc
-    add_to_file 'eval "$(starship init zsh)"' ~/.zshrc
+    if [[ ! -d "$plugin_dir/zsh-syntax-highlighting" ]]; then
+        git clone https://github.com/zsh-users/zsh-syntax-highlighting "$plugin_dir/zsh-syntax-highlighting"
+        log_info "zsh-syntax-highlighting installed"
+    else
+        log_warn "zsh-syntax-highlighting already installed, skipping..."
+    fi
 }
 
 install_neovim() {
@@ -291,15 +294,14 @@ main() {
     log_info "Starting installation process..."
 
     install_core_packages
-    install_fzf
     install_starship
 
-    # NOTE: Dotfiles must be installed BEFORE configure_zsh.
-    # install-dotfiles.sh backs up and moves pre-existing config files.
-    # If it ran after we wrote ~/.zshrc, it would silently move that file
-    # away and leave no .zshrc behind.
+    # NOTE: Dotfiles must be installed before install_fzf.
+    # install_fzf runs ~/.fzf/install --all which appends to ~/.zshrc.
+    # Stow must place .zshrc first so fzf appends to the symlinked file.
     install_dotfiles
-    configure_zsh
+    install_fzf
+    install_zsh_plugins
 
     install_neovim
     install_lazyvim

@@ -44,9 +44,7 @@ backup_configs() {
         # "$HOME/.config/ghostty"
         "$HOME/.tmux.conf"
         "$HOME/.zsh_aliases"
-        # "$HOME/.zshrc" is intentionally excluded: the zshrc stow package is
-        # commented out, so backing up and moving .zshrc would delete it with
-        # nothing to replace it.  .zshrc is managed directly by install.sh.
+        "$HOME/.zshrc"
     )
 
     local backed_up=false
@@ -142,7 +140,6 @@ stow_dotfiles() {
         "starship"
         "tmux"
         "zsh"
-        # "zshrc"
         # "ghostty"
         # "nvim"
     )
@@ -203,6 +200,7 @@ verify_stow() {
         "$HOME/.config/starship.toml"
         "$HOME/.config/tmux/tmux.conf"
         "$HOME/.zsh_aliases"
+        "$HOME/.zshrc"
     )
 
     local all_ok=true
