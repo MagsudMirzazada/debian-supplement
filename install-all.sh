@@ -64,6 +64,7 @@ install_core_packages() {
         bat
         ripgrep
         tree
+        xclip
         tmux
         stow
         wget

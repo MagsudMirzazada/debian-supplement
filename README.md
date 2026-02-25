@@ -31,7 +31,7 @@ Stow symlinks (from `~/dotfiles`):
 
 Installed from GitHub:
 
-- `~/.fzf/` — fzf fuzzy finder (binary only via `--bin`; shell integration in `.zshrc` template)
+- `~/.fzf/` — fzf fuzzy finder (binary only via `--bin`; shell integration in `.zshrc` template). Command-line key bindings (CTRL-T file picker, CTRL-R history search, ALT-C directory jump) are customized in `.zsh_aliases`.
 - `~/.zsh/zsh-autosuggestions/` — zsh-autosuggestions plugin
 - `~/.zsh/zsh-syntax-highlighting/` — zsh-syntax-highlighting plugin
 - `~/.config/nvim/` — LazyVim starter
