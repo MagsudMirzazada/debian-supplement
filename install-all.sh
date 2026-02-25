@@ -62,7 +62,6 @@ install_core_packages() {
     readonly PACKAGES=(
         zsh
         bat
-        fzf
         ripgrep
         tree
         tmux
@@ -75,6 +74,19 @@ install_core_packages() {
     )
 
     sudo apt install -y "${PACKAGES[@]}"
+}
+
+install_fzf() {
+    log_info "Installing fzf from GitHub..."
+
+    if [[ -d "$HOME/.fzf" ]]; then
+        log_warn "fzf already installed at ~/.fzf, skipping..."
+        return
+    fi
+
+    git clone --depth 1 https://github.com/junegunn/fzf.git "$HOME/.fzf"
+    "$HOME/.fzf/install" --all
+    log_info "fzf installed successfully"
 }
 
 install_starship() {
@@ -120,27 +132,6 @@ configure_zsh() {
     add_to_file '' ~/.zshrc
     add_to_file '# Load aliases' ~/.zshrc
     add_to_file '[[ -f ~/.zsh_aliases ]] && source ~/.zsh_aliases' ~/.zshrc
-
-    # FIX: The '--zsh' shell-integration flag was introduced in fzf 0.48.0.
-    #      Debian stable ships much older fzf builds (e.g. 0.38), so calling
-    #      'fzf --zsh' on those versions prints an error and breaks .zshrc.
-    #      We check the version and fall back to the legacy sourcing method when
-    #      necessary.
-    add_to_file '' ~/.zshrc
-    add_to_file '# Set up fzf key bindings and fuzzy completion' ~/.zshrc
-
-    local fzf_min_version="0.48.0"
-    local fzf_current_version
-    fzf_current_version="$(fzf --version 2>/dev/null | awk '{print $1}' || echo "0.0.0")"
-
-    if version_gte "$fzf_current_version" "$fzf_min_version"; then
-        add_to_file 'source <(fzf --zsh)' ~/.zshrc
-    else
-        log_warn "fzf $fzf_current_version detected (< $fzf_min_version); using legacy integration"
-        # Legacy paths shipped with the Debian fzf package
-        add_to_file '[[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]] && source /usr/share/doc/fzf/examples/key-bindings.zsh' ~/.zshrc
-        add_to_file '[[ -f /usr/share/doc/fzf/examples/completion.zsh  ]] && source /usr/share/doc/fzf/examples/completion.zsh'  ~/.zshrc
-    fi
 
     # Initialize Starship prompt
     add_to_file '' ~/.zshrc
@@ -300,6 +291,7 @@ main() {
     log_info "Starting installation process..."
 
     install_core_packages
+    install_fzf
     install_starship
 
     # NOTE: Dotfiles must be installed BEFORE configure_zsh.
